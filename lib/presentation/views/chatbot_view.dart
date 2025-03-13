@@ -30,7 +30,7 @@ class ChatbotViewState extends State<ChatbotView> {
       final response = await http.post(
         Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
         headers: {
-          "Authorization": "Bearer YOUR API KEY",
+          "Authorization": "Bearer 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",
           // "HTTP-Referer": "https://deepseek-chatbot.netlify.app",
           // "X-Title": "DeepSeekChatbot",
           "Content-Type": "application/json",

@@ -3,8 +3,6 @@ import 'package:deepseek_app/config/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_markdown/flutter_markdown.dart';
-
-// Importa los plugins para voz a texto y texto a voz
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -20,7 +18,6 @@ class ChatbotViewState extends State<ChatbotView> {
   final List<Map<String, String>> _messages = [];
   bool _isLoading = false;
 
-  // Variables para Speech-to-Text y Text-to-Speech
   late stt.SpeechToText _speech;
   bool _isListening = false;
   late FlutterTts _flutterTts;
@@ -31,13 +28,13 @@ class ChatbotViewState extends State<ChatbotView> {
     _speech = stt.SpeechToText();
     _flutterTts = FlutterTts();
 
-    // Configura el idioma y velocidad de la síntesis (ajústalo según prefieras)
+    // Configuración inicial del TTS
     _flutterTts.setLanguage("es-ES");
     _flutterTts.setSpeechRate(0.5);
   }
 
   Future<void> sendMessage() async {
-    final String userMessage = _controller.text.trim();
+    final userMessage = _controller.text.trim();
     if (userMessage.isEmpty) return;
 
     setState(() {
@@ -65,31 +62,38 @@ class ChatbotViewState extends State<ChatbotView> {
 
       if (response.statusCode == 401) {
         setState(() {
-          _messages.add({"role": "bot", "content": "⚠️ Error: Clave API inválida. Verifica tu configuración."});
+          _messages.add({
+            "role": "bot",
+            "content": "⚠️ Error: Clave API inválida. Verifica tu configuración."
+          });
         });
         return;
       }
 
       if (response.statusCode != 200) {
         setState(() {
-          _messages.add({"role": "bot", "content": "⚠️ Error en la solicitud: ${response.statusCode}."});
+          _messages.add({
+            "role": "bot",
+            "content": "⚠️ Error en la solicitud: ${response.statusCode}."
+          });
         });
         return;
       }
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
-      final String botResponse = data["choices"]?[0]?["message"]?["content"] ?? "No se recibió respuesta.";
+      final botResponse = data["choices"]?[0]?["message"]?["content"] ?? "No se recibió respuesta.";
 
       setState(() {
         _messages.add({"role": "bot", "content": botResponse});
       });
 
-      // Convierte el texto de la respuesta en voz
-      await _flutterTts.speak(botResponse);
+      // Convierte el texto de la respuesta en voz, sin markdown
+      final plainText = _stripMarkdown(botResponse);
+      await _flutterTts.speak(plainText);
 
     } catch (error) {
       setState(() {
-        _messages.add({"role": "bot", "content": "Error: ${error.toString()}"});  
+        _messages.add({"role": "bot", "content": "Error: $error"});
       });
     } finally {
       setState(() {
@@ -98,7 +102,7 @@ class ChatbotViewState extends State<ChatbotView> {
     }
   }
 
-  // Función para iniciar el reconocimiento de voz
+  // Iniciar el reconocimiento de voz
   Future<void> _listen() async {
     bool available = await _speech.initialize(
       onStatus: (status) => print("Speech status: $status"),
@@ -110,7 +114,6 @@ class ChatbotViewState extends State<ChatbotView> {
       });
       _speech.listen(
         onResult: (result) {
-          // Actualiza el TextField con lo que se reconoce
           setState(() {
             _controller.text = result.recognizedWords;
           });
@@ -118,6 +121,8 @@ class ChatbotViewState extends State<ChatbotView> {
             setState(() {
               _isListening = false;
             });
+            // Envía automáticamente cuando termina de hablar
+            sendMessage();
           }
         },
       );
@@ -131,6 +136,32 @@ class ChatbotViewState extends State<ChatbotView> {
     setState(() {
       _isListening = false;
     });
+  }
+
+  // Reproduce un mensaje (eliminando sintaxis Markdown)
+  void _replayMessage(String message) async {
+    final plainText = _stripMarkdown(message);
+    await _flutterTts.speak(plainText);
+  }
+
+  // Limpia sintaxis Markdown para lectura TTS
+  String _stripMarkdown(String input) {
+    // Elimina **texto**, __texto__, *texto*, _texto_
+    String output = input.replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1');
+    output = output.replaceAll(RegExp(r'__(.*?)__'), r'$1');
+    output = output.replaceAll(RegExp(r'\*(.*?)\*'), r'$1');
+    output = output.replaceAll(RegExp(r'_(.*?)_'), r'$1');
+
+    // Elimina bloques de código y backticks
+    output = output.replaceAll(RegExp(r'```(.*?)```', dotAll: true), r'$1');
+    output = output.replaceAll(RegExp(r'`(.*?)`'), r'$1');
+
+    // Elimina enlaces [texto](url) dejando solo el texto
+    output = output.replaceAllMapped(RegExp(r'\[(.*?)\]\((.*?)\)'), (match) {
+      return match.group(1) ?? '';
+    });
+
+    return output.trim();
   }
 
   @override
@@ -157,9 +188,27 @@ class ChatbotViewState extends State<ChatbotView> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.black12),
                     ),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                    child: MarkdownBody(
-                      data: message["content"]!,
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: MarkdownBody(
+                            data: message["content"]!,
+                          ),
+                        ),
+                        // Espacio entre texto y botón
+                        const SizedBox(width: 8),
+                        // Botón para reproducir mensaje
+                        IconButton(
+                          icon: const Icon(Icons.volume_up),
+                          onPressed: () {
+                            _replayMessage(message["content"]!);
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -175,7 +224,6 @@ class ChatbotViewState extends State<ChatbotView> {
             padding: const EdgeInsets.all(10),
             child: Row(
               children: [
-                // Botón de micrófono para activar/desactivar el reconocimiento de voz
                 IconButton(
                   icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
                   onPressed: () {
@@ -189,6 +237,7 @@ class ChatbotViewState extends State<ChatbotView> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    maxLines: null, // Crece verticalmente
                     decoration: const InputDecoration(
                       hintText: "Escribe o habla tu mensaje...",
                       border: OutlineInputBorder(),

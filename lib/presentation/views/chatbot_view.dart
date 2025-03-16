@@ -87,9 +87,8 @@ class ChatbotViewState extends State<ChatbotView> {
         _messages.add({"role": "bot", "content": botResponse});
       });
 
-      // Convierte el texto de la respuesta en voz, sin markdown
-      final plainText = _stripMarkdown(botResponse);
-      await _flutterTts.speak(plainText);
+      // Reproduce el texto tal cual
+      await _flutterTts.speak(botResponse);
 
     } catch (error) {
       setState(() {
@@ -138,30 +137,9 @@ class ChatbotViewState extends State<ChatbotView> {
     });
   }
 
-  // Reproduce un mensaje (eliminando sintaxis Markdown)
+  // Reproduce un mensaje (sin quitar Markdown)
   void _replayMessage(String message) async {
-    final plainText = _stripMarkdown(message);
-    await _flutterTts.speak(plainText);
-  }
-
-  // Limpia sintaxis Markdown para lectura TTS
-  String _stripMarkdown(String input) {
-    // Elimina **texto**, __texto__, *texto*, _texto_
-    String output = input.replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1');
-    output = output.replaceAll(RegExp(r'__(.*?)__'), r'$1');
-    output = output.replaceAll(RegExp(r'\*(.*?)\*'), r'$1');
-    output = output.replaceAll(RegExp(r'_(.*?)_'), r'$1');
-
-    // Elimina bloques de código y backticks
-    output = output.replaceAll(RegExp(r'```(.*?)```', dotAll: true), r'$1');
-    output = output.replaceAll(RegExp(r'`(.*?)`'), r'$1');
-
-    // Elimina enlaces [texto](url) dejando solo el texto
-    output = output.replaceAllMapped(RegExp(r'\[(.*?)\]\((.*?)\)'), (match) {
-      return match.group(1) ?? '';
-    });
-
-    return output.trim();
+    await _flutterTts.speak(message);
   }
 
   @override
@@ -199,9 +177,7 @@ class ChatbotViewState extends State<ChatbotView> {
                             data: message["content"]!,
                           ),
                         ),
-                        // Espacio entre texto y botón
                         const SizedBox(width: 8),
-                        // Botón para reproducir mensaje
                         IconButton(
                           icon: const Icon(Icons.volume_up),
                           onPressed: () {

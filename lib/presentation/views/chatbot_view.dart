@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:deepseek_app/config/config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -30,7 +31,7 @@ class ChatbotViewState extends State<ChatbotView> {
       final response = await http.post(
         Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
         headers: {
-          "Authorization": "Bearer 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",
+          "Authorization": "Bearer ${Environment.deepSeekKey}", // Aquí concatenamos el token
           // "HTTP-Referer": "https://deepseek-chatbot.netlify.app",
           // "X-Title": "DeepSeekChatbot",
           "Content-Type": "application/json",
@@ -40,6 +41,24 @@ class ChatbotViewState extends State<ChatbotView> {
           "messages": [{"role": "user", "content": userMessage}],
         }),  
       );
+
+      print("📡 Status Code de la API: ${response.statusCode}");
+      print("📩 Respuesta de la API: ${response.body}");
+
+      // Manejo de errores API
+      if (response.statusCode == 401) {
+        setState(() {
+          _messages.add({"role": "bot", "content": "⚠️ Error: Clave API inválida. Verifica tu configuración."});
+        });
+        return;
+      }
+
+      if (response.statusCode != 200) {
+        setState(() {
+          _messages.add({"role": "bot", "content": "⚠️ Error en la solicitud: ${response.statusCode}."});
+        });
+        return;
+      }
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
 

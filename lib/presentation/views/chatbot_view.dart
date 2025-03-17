@@ -1,10 +1,7 @@
-import 'dart:convert';
-import 'package:deepseek_app/config/config.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
+
+import 'package:deepseek_app/infrastructure/services/services.dart';
+import 'package:deepseek_app/presentation/widgets/widgets.dart';
 
 class ChatbotView extends StatefulWidget {
   const ChatbotView({super.key});
@@ -18,21 +15,16 @@ class ChatbotViewState extends State<ChatbotView> {
   final List<Map<String, String>> _messages = [];
   bool _isLoading = false;
 
-  late stt.SpeechToText _speech;
-  bool _isListening = false;
-  late FlutterTts _flutterTts;
+  // Instanciamos nuestro SpeechService
+  late SpeechService _speechService;
 
   @override
   void initState() {
     super.initState();
-    _speech = stt.SpeechToText();
-    _flutterTts = FlutterTts();
-
-    // Configuración inicial del TTS
-    _flutterTts.setLanguage("es-ES");
-    _flutterTts.setSpeechRate(0.5);
+    _speechService = SpeechService();
   }
 
+  // Envía el mensaje del usuario y obtiene respuesta
   Future<void> sendMessage() async {
     final userMessage = _controller.text.trim();
     if (userMessage.isEmpty) return;
@@ -41,54 +33,18 @@ class ChatbotViewState extends State<ChatbotView> {
       _messages.add({"role": "user", "content": userMessage});
       _isLoading = true;
     });
-
     _controller.clear();
 
     try {
-      final response = await http.post(
-        Uri.parse("https://openrouter.ai/api/v1/chat/completions"),
-        headers: {
-          "Authorization": "Bearer ${Environment.deepSeekKey}",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "model": "deepseek/deepseek-r1:free",
-          "messages": [{"role": "user", "content": userMessage}],
-        }),
-      );
-
-      print("📡 Status Code de la API: ${response.statusCode}");
-      print("📩 Respuesta de la API: ${response.body}");
-
-      if (response.statusCode == 401) {
-        setState(() {
-          _messages.add({
-            "role": "bot",
-            "content": "⚠️ Error: Clave API inválida. Verifica tu configuración."
-          });
-        });
-        return;
-      }
-
-      if (response.statusCode != 200) {
-        setState(() {
-          _messages.add({
-            "role": "bot",
-            "content": "⚠️ Error en la solicitud: ${response.statusCode}."
-          });
-        });
-        return;
-      }
-
-      final data = jsonDecode(utf8.decode(response.bodyBytes));
-      final botResponse = data["choices"]?[0]?["message"]?["content"] ?? "No se recibió respuesta.";
+      // Llamada a la API
+      final botResponse = await ChatService.fetchBotResponse(userMessage);
 
       setState(() {
         _messages.add({"role": "bot", "content": botResponse});
       });
 
-      // Reproduce el texto tal cual
-      await _flutterTts.speak(botResponse);
+      // Reproducir el texto del bot
+      _speechService.speak(botResponse);
 
     } catch (error) {
       setState(() {
@@ -101,109 +57,87 @@ class ChatbotViewState extends State<ChatbotView> {
     }
   }
 
-  // Iniciar el reconocimiento de voz
+  // Inicializa y empieza a escuchar
   Future<void> _listen() async {
-    bool available = await _speech.initialize(
-      onStatus: (status) => print("Speech status: $status"),
-      onError: (errorNotification) => print("Speech error: $errorNotification"),
-    );
-    if (available) {
-      setState(() {
-        _isListening = true;
-      });
-      _speech.listen(
-        onResult: (result) {
-          setState(() {
-            _controller.text = result.recognizedWords;
-          });
-          if (result.finalResult) {
-            setState(() {
-              _isListening = false;
-            });
-            // Envía automáticamente cuando termina de hablar
-            sendMessage();
-          }
-        },
-      );
-    } else {
+    final available = await _speechService.initSpeech();
+    if (!available) {
       print("El reconocimiento de voz no está disponible");
+      return;
     }
-  }
-
-  void _stopListening() {
-    _speech.stop();
     setState(() {
-      _isListening = false;
+      _speechService.isListening = true;
+    });
+    _speechService.startListening((recognizedWords) {
+      setState(() {
+        _controller.text = recognizedWords;
+      });
+      // Si finalResult => envía
+      if (!_speechService.isListening) {
+        sendMessage();
+      }
     });
   }
 
-  // Reproduce un mensaje (sin quitar Markdown)
-  void _replayMessage(String message) async {
-    await _flutterTts.speak(message);
+  // Detiene el reconocimiento de voz
+  void _stopListening() {
+    _speechService.stopListening();
+    setState(() {
+      _speechService.isListening = false;
+    });
   }
+
+  // Manejo de TTS
+  void _playTts(String text) => _speechService.speak(text);
+  void _pauseTts() => _speechService.pause();
+  void _stopTts() => _speechService.stop();
 
   @override
   Widget build(BuildContext context) {
+    final isListening = _speechService.isListening;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("ChatBot DeepSeek")),
+      backgroundColor: Colors.grey[200],
+      appBar: AppBar(
+        title: const Text("ChatBot DeepSeek"),
+        elevation: 0,
+      ),
       body: Column(
         children: [
+          // Lista de mensajes
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final message = _messages[index];
                 final isUser = message["role"] == "user";
 
-                return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 5),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isUser ? Colors.grey[300] : Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.black12),
-                    ),
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.75,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Expanded(
-                          child: MarkdownBody(
-                            data: message["content"]!,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.volume_up),
-                          onPressed: () {
-                            _replayMessage(message["content"]!);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+                return ChatBubble(
+                  isUser: isUser,
+                  content: message["content"] ?? '',
+                  onPlay: () => _playTts(message["content"] ?? ''),
+                  onPause: () => _pauseTts(),
+                  onStop: () => _stopTts(),
                 );
               },
             ),
           ),
+
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.all(10),
               child: CircularProgressIndicator(),
             ),
-          Padding(
-            padding: const EdgeInsets.all(10),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            color: Colors.white,
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
+                  icon: Icon(isListening ? Icons.mic : Icons.mic_none),
                   onPressed: () {
-                    if (_isListening) {
+                    if (isListening) {
                       _stopListening();
                     } else {
                       _listen();
@@ -211,19 +145,28 @@ class ChatbotViewState extends State<ChatbotView> {
                   },
                 ),
                 Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    maxLines: null, // Crece verticalmente
-                    decoration: const InputDecoration(
-                      hintText: "Escribe o habla tu mensaje...",
-                      border: OutlineInputBorder(),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TextField(
+                      controller: _controller,
+                      maxLines: 1,
+                      minLines: 1,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: "Escribe o habla tu mensaje...",
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  color: Colors.blue,
                   onPressed: _isLoading ? null : sendMessage,
-                  child: const Text("Enviar"),
                 ),
               ],
             ),

@@ -41,17 +41,18 @@ class SpeechService {
 
   /// Empieza a escuchar y notifica cada vez que reconoce palabras.
   /// Cuando finaliza el reconocimiento, se `isListening = false`.
-  void startListening(Function(String recognizedWords) onResult) {
+  void startListening(Function(String recognizedWords, bool isFinal) onResult) {
     isListening = true;
     _speechToText.listen(
       onResult: (result) {
-        onResult(result.recognizedWords);
+        onResult(result.recognizedWords, result.finalResult);
         if (result.finalResult) {
           isListening = false;
         }
       },
     );
   }
+
 
   /// Detiene STT
   void stopListening() {

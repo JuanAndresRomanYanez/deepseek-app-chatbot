@@ -67,16 +67,17 @@ class ChatbotViewState extends State<ChatbotView> {
     setState(() {
       _speechService.isListening = true;
     });
-    _speechService.startListening((recognizedWords) {
+    _speechService.startListening((recognizedWords, isFinal) {
       setState(() {
         _controller.text = recognizedWords;
       });
-      // Si finalResult => envía
-      if (!_speechService.isListening) {
+      // Cuando el resultado sea final, enviamos el mensaje automáticamente.
+      if (isFinal) {
         sendMessage();
       }
     });
   }
+
 
   // Detiene el reconocimiento de voz
   void _stopListening() {

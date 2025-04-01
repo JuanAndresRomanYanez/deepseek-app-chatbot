@@ -36,8 +36,12 @@ class ChatbotViewState extends State<ChatbotView> {
     _controller.clear();
 
     try {
-      // Llamada a la API
-      final botResponse = await ChatService.fetchBotResponse(userMessage);
+      // Llamada a la API de deepseek para obtener respuesta
+      // final botResponse = await ChatService.fetchBotResponse(userMessage);
+
+      // Llamada a la API del backend RAG
+      final data = await RagService.fetchBotResponse(userMessage);
+      final botResponse = data["answer"] ?? "No se recibió respuesta.";
 
       setState(() {
         _messages.add({"role": "bot", "content": botResponse});

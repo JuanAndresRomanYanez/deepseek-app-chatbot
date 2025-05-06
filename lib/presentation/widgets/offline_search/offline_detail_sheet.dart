@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:deepseek_app/infrastructure/services/speech_service.dart';
+import 'package:deepseek_app/infrastructure/services/services.dart';
 
 class OfflineDetailSheet extends StatefulWidget {
   final String content;

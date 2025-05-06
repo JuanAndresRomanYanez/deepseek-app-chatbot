@@ -4,17 +4,18 @@ import 'package:deepseek_app/config/config.dart';
 
 /// Servicio para llamar a TU backend RAG en /query
 class RagService {
-  /// Envía la pregunta del usuario y obtiene la respuesta y fuentes.
-  static Future<Map<String, dynamic>> fetchBotResponse(String userMessage) async {
+  /// Llama a la API de RAG y devuelve la respuesta del bot.
+  static Future<Map<String, dynamic>> fetchBotResponse(String userMessage, List<Map<String, String>> history, String summary) async {
     final uri = Uri.parse("${Environment.localApiBaseUrl}/query");
-
-    // POST con JSON: {"question": userMessage}
+    final body = jsonEncode({
+      "question": userMessage,
+      "history": history,
+      "summary": summary,
+    });
     final response = await http.post(
       uri,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: jsonEncode({"question": userMessage}),
+      headers: {"Content-Type": "application/json"},
+      body: body,
     );
 
     if (response.statusCode != 200) {

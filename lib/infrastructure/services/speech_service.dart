@@ -28,7 +28,7 @@ class SpeechService {
     });
     _flutterTts.setErrorHandler((msg) {
       ttsState = TtsState.stopped;
-      print("TTS Error: $msg");
+      // print("TTS Error: $msg");
     });
   }
 
@@ -53,7 +53,6 @@ class SpeechService {
     );
   }
 
-
   /// Detiene STT
   void stopListening() {
     _speechToText.stop();
@@ -76,7 +75,7 @@ class SpeechService {
     if (result == 1) {
       ttsState = TtsState.paused;
     } else {
-      print("Pause no soportado en esta plataforma.");
+      // print("Pause no soportado en esta plataforma.");
     }
   }
 
